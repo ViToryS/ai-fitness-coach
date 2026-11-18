@@ -1,8 +1,18 @@
-﻿venv/
-__pycache__/
-*.pyc
-.vscode/
-*.db
-config.json
+﻿__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+env/
 
 .vs/
+*.suo
+*.user
+.vscode/
+
+models/
+*.task
+
+config.json
+
+.DS_Store
+Thumbs.db

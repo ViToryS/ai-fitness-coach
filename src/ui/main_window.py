@@ -1,5 +1,6 @@
 ﻿import sys
 import cv2
+import numpy as np  
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QHBoxLayout
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
@@ -76,6 +77,11 @@ class MainWindow(QMainWindow):
         else:
             self.btn_start.setEnabled(False)
 
+    def on_landmarks(self, landmarks: np.ndarray):
+        if landmarks.size == 0:
+            return
+        pass
+
     def start_camera(self):
         cam_idx = self.camera_combo.currentData()
         if cam_idx == -1: return
@@ -89,6 +95,7 @@ class MainWindow(QMainWindow):
 
         self.camera = CameraManager(camera_index=cam_idx)
         self.camera.frame_ready.connect(self.update_frame)
+        self.camera.landmarks_ready.connect(self.on_landmarks)
         self.camera.error_occurred.connect(self.show_error)
         self.camera.start()
 
@@ -123,6 +130,7 @@ class MainWindow(QMainWindow):
         ))
 
     def show_error(self, message):
+        print(f"[MainWindow] ОШИБКА: {message}")
         self.video_label.setText(f"ОШИБКА:\n{message}")
         self.stop_camera()
 
