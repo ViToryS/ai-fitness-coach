@@ -4,7 +4,7 @@ import numpy as np
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QHBoxLayout
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
-
+from src.ui.phase_panel import PhasePanel
 from src.core.camera import CameraManager
 from src.core.camera_utils import get_available_cameras
 from src.infra.config_manager import save_camera_index, load_camera_index
@@ -43,7 +43,8 @@ class MainWindow(QMainWindow):
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("background-color: black; color: white;")
         layout.addWidget(self.video_label)
-
+        self.phase_panel = PhasePanel()
+        layout.addWidget(self.phase_panel)
         self.btn_start.clicked.connect(self.start_camera)
         self.btn_stop.clicked.connect(self.stop_camera)
 
@@ -97,6 +98,9 @@ class MainWindow(QMainWindow):
         self.camera.frame_ready.connect(self.update_frame)
         self.camera.landmarks_ready.connect(self.on_landmarks)
         self.camera.error_occurred.connect(self.show_error)
+
+        self.camera.phase_ready.connect(self.phase_panel.set_phase)
+
         self.camera.start()
 
         self.btn_start.setEnabled(False)
@@ -110,7 +114,7 @@ class MainWindow(QMainWindow):
             self.camera = None
             self.video_label.clear()
             self.video_label.setText("Видео остановлено")
-        
+        self.phase_panel.reset()
         self.btn_start.setEnabled(True)
         self.btn_refresh.setEnabled(True)
         self.btn_stop.setEnabled(False)

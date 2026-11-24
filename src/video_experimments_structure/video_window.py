@@ -115,6 +115,9 @@ class VideoWindow(QMainWindow):
         self.video.error_occurred.connect(self.show_error)
         self.video.finished.connect(self.on_video_finished)
         self.video.phase_ready.connect(self.phase_panel.set_phase)
+        self.video.viewpoint_ready.connect(
+            self.phase_panel.add_viewpoint
+        )
         self.is_paused = False
         self._stopping = False
 

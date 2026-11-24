@@ -11,10 +11,14 @@ from PySide6.QtCore import QThread, Signal
 from src.core.pose_estimator import PoseEstimator
 from src.core.skeleton_visualizer import draw_skeleton
 from src.core.phase_detector import SquatPhaseDetector
+from src.core.viewpoint_detector import ViewpointDetector
+from src.models.viewpoint import Viewpoint
+
 
 class PoseWorker(QThread):
     error_occurred = Signal(str)
     phase_ready = Signal(str)
+    viewpoint_ready = Signal(str, int)
 
     def __init__(self):
         super().__init__()
@@ -57,6 +61,11 @@ class PoseWorker(QThread):
             pose = PoseEstimator()
             phase_detector = SquatPhaseDetector()
             last_phase = None
+
+            viewpoint_detector = ViewpointDetector()
+            last_viewpoint = Viewpoint.UNKNOWN
+            viewpoint_count = 0
+
             while True:
                 with self._condition:
                     while self._running and self._latest_frame is None:
@@ -71,6 +80,24 @@ class PoseWorker(QThread):
                 landmarks = pose.process_frame(frame)
 
                 phase = phase_detector.update(landmarks)
+
+                if landmarks is not None:
+                    viewpoint_result = viewpoint_detector.update(
+                        landmarks,
+                        frame.shape
+                    )
+
+                    if (
+                            viewpoint_result.viewpoint != Viewpoint.UNKNOWN
+                            and viewpoint_result.viewpoint != last_viewpoint
+                    ):
+                        viewpoint_count += 1
+                        last_viewpoint = viewpoint_result.viewpoint
+
+                        self.viewpoint_ready.emit(
+                            last_viewpoint.value,
+                            viewpoint_count
+                        )
 
                 if phase != last_phase:
 
@@ -94,7 +121,7 @@ class VideoManager(QThread):
     frame_ready = Signal(np.ndarray)
     error_occurred = Signal(str)
     phase_ready = Signal(str)
-
+    viewpoint_ready = Signal(str, int)
     LANDMARK_TIMEOUT = 0.3
 
     def __init__(self, video_path: str | Path):
@@ -131,6 +158,9 @@ class VideoManager(QThread):
             self.pose_worker = PoseWorker()
             self.pose_worker.phase_ready.connect(
                 self.forward_phase
+            )
+            self.pose_worker.viewpoint_ready.connect(
+                self.forward_viewpoint
             )
 
             self.pose_worker.error_occurred.connect(
@@ -220,3 +250,6 @@ class VideoManager(QThread):
 
     def forward_phase(self, phase):
         self.phase_ready.emit(phase)
+
+    def forward_viewpoint(self, viewpoint, count):
+        self.viewpoint_ready.emit(viewpoint, count)
