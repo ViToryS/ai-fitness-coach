@@ -1,11 +1,13 @@
+
 from abc import ABC, abstractmethod
 
 from src.exercises.base.phase_detector import PhaseDetector
+from src.exercises.base.viewpoint_detector import ViewpointDetector
 from src.models.viewpoint import Viewpoint
 
 
 class Exercise(ABC):
-    """Базовое описание упражнения."""
+    """Базовое описание упражнения и его определителей."""
 
     @property
     @abstractmethod
@@ -19,4 +21,8 @@ class Exercise(ABC):
 
     @abstractmethod
     def create_phase_detector(self) -> PhaseDetector:
+        pass
+
+    @abstractmethod
+    def create_viewpoint_detector(self) -> ViewpointDetector:
         pass

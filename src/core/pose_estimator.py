@@ -81,7 +81,7 @@ class PoseEstimator:
         valid_mask = raw[:, 3] >= self.visibility_threshold
 
         if self._prev_landmarks is not None:
-            raw[~valid_mask] = self._prev_landmarks[~valid_mask]
+            raw[~valid_mask, :3] = self._prev_landmarks[~valid_mask, :3]
 
         if self._prev_landmarks is None:
             smoothed = raw.copy()
@@ -91,7 +91,8 @@ class PoseEstimator:
                 + (1.0 - self.smoothing_alpha) * self._prev_landmarks
             )
 
-        smoothed[~valid_mask] = raw[~valid_mask]
+        smoothed[~valid_mask, :3] = raw[~valid_mask, :3]
+        smoothed[:, 3] = raw[:, 3]
 
         self._prev_landmarks = smoothed
         return smoothed

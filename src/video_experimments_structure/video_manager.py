@@ -11,7 +11,7 @@ from PySide6.QtCore import QThread, Signal
 from src.core.pose_estimator import PoseEstimator
 from src.core.skeleton_visualizer import draw_skeleton
 from src.core.phase_detector import SquatPhaseDetector
-from src.core.viewpoint_detector import ViewpointDetector
+from src.exercises.squat.squat_exercise import SquatExercise
 from src.models.viewpoint import Viewpoint
 
 
@@ -62,7 +62,7 @@ class PoseWorker(QThread):
             phase_detector = SquatPhaseDetector()
             last_phase = None
 
-            viewpoint_detector = ViewpointDetector()
+            viewpoint_detector = SquatExercise().create_viewpoint_detector()
             last_viewpoint = Viewpoint.UNKNOWN
             viewpoint_count = 0
 
@@ -76,8 +76,11 @@ class PoseWorker(QThread):
 
                     frame = self._latest_frame
                     self._latest_frame = None
-
                 landmarks = pose.process_frame(frame)
+
+                if landmarks is None:
+                    viewpoint_detector.reset()
+                    last_viewpoint = Viewpoint.UNKNOWN
 
                 phase = phase_detector.update(landmarks)
 
