@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 from src.ui.phase_panel import PhasePanel
-
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -57,12 +57,18 @@ class VideoWindow(QMainWindow):
 
         self.video_label = QLabel("Выберите видео для анализа")
         self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setMinimumSize(400, 300)
         self.video_label.setStyleSheet(
             "background-color: black; color: white;"
         )
+
         self.phase_panel = PhasePanel()
-        layout.addWidget(self.phase_panel)
-        layout.addWidget(self.video_label)
+
+        video_layout = QHBoxLayout()
+        video_layout.addWidget(self.video_label, stretch=1)
+        video_layout.addWidget(self.phase_panel)
+
+        layout.addLayout(video_layout, stretch=1)
 
         self.btn_select.clicked.connect(self.select_video)
         self.btn_play.clicked.connect(self.play_video)
@@ -102,6 +108,9 @@ class VideoWindow(QMainWindow):
             return
 
         self.video = VideoManager(self.video_path)
+        self.phase_panel.begin_video(
+            Path(self.video_path).name
+        )
         self.video.frame_ready.connect(self.update_frame)
         self.video.error_occurred.connect(self.show_error)
         self.video.finished.connect(self.on_video_finished)

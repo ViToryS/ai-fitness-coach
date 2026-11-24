@@ -1,9 +1,11 @@
 
+import time
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QToolButton,
     QLabel,
+    QPlainTextEdit,
 )
 from PySide6.QtCore import Qt
 
@@ -13,44 +15,95 @@ class PhasePanel(QWidget):
     def __init__(self):
         super().__init__()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self.current_phase = None
+        self.phase_start_time = None
 
-        self.toggle_button = QToolButton()
-        self.toggle_button.setText("Фаза упражнения")
-        self.toggle_button.setCheckable(True)
-        self.toggle_button.setChecked(False)
-        self.toggle_button.setArrowType(Qt.RightArrow)
-        self.toggle_button.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
+        self.setMinimumWidth(240)
+        self.setMaximumWidth(300)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(10)
+
+        title = QLabel("Текущая фаза")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            "font-size: 14px; font-weight: bold;"
         )
 
         self.phase_label = QLabel("Ожидание упражнения")
         self.phase_label.setAlignment(Qt.AlignCenter)
-        self.phase_label.setStyleSheet(
-            "font-size: 18px; font-weight: bold; padding: 12px;"
+        self.phase_label.setWordWrap(True)
+        self.phase_label.setMinimumHeight(90)
+        self.phase_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                padding: 12px;
+                border: 1px solid #777;
+                border-radius: 8px;
+            }
+        """)
+
+        history_title = QLabel("История фаз")
+        history_title.setStyleSheet(
+            "font-size: 14px; font-weight: bold;"
         )
 
-        self.content = QWidget()
-        content_layout = QVBoxLayout(self.content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addWidget(self.phase_label)
-
-        self.content.setVisible(False)
-
-        layout.addWidget(self.toggle_button)
-        layout.addWidget(self.content)
-
-        self.toggle_button.toggled.connect(self.toggle_content)
-
-    def toggle_content(self, checked):
-        self.content.setVisible(checked)
-        self.toggle_button.setArrowType(
-            Qt.DownArrow if checked else Qt.RightArrow
+        self.history = QPlainTextEdit()
+        self.history.setReadOnly(True)
+        self.history.setPlaceholderText(
+            "Здесь будут отображаться пройденные фазы"
         )
+        self.history.setStyleSheet("""
+            QPlainTextEdit {
+                font-size: 13px;
+                padding: 5px;
+                border: 1px solid #777;
+                border-radius: 6px;
+            }
+        """)
+
+        layout.addWidget(title)
+        layout.addWidget(self.phase_label)
+        layout.addWidget(history_title)
+        layout.addWidget(self.history, stretch=1)
 
     def set_phase(self, phase: str):
+        now = time.monotonic()
+
+
+        if phase == self.current_phase:
+            return
+
+        if self.current_phase is not None:
+            duration = now - self.phase_start_time
+
+            self.history.appendPlainText(
+                f"{self.current_phase} – {duration:.2f} сек."
+            )
+
+        self.current_phase = phase
+        self.phase_start_time = now
+
         self.phase_label.setText(phase)
 
     def reset(self):
-        self.set_phase("Ожидание упражнения")
+        self.current_phase = None
+        self.phase_start_time = None
+        self.phase_label.setText("Ожидание упражнения")
+
+    def begin_video(self, video_name: str):
+        if self.history.toPlainText():
+            self.history.appendPlainText("")
+            self.history.appendPlainText(
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+            self.history.appendPlainText("")
+
+        self.history.appendPlainText(f"Видео: {video_name}")
+        self.history.appendPlainText("")
+
+        self.current_phase = None
+        self.phase_start_time = None
+        self.phase_label.setText("Ожидание упражнения")
