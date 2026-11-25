@@ -7,7 +7,7 @@ from src.exercises.squat.phase.knee_angle_calculator import KneeAngleCalculator
 from src.exercises.squat.phase.movement_analyzer import MovementAnalyzer
 
 
-class SquatPhaseDetector:
+class SquatPhaseAlgorithm:
     READY = "Исходное положение"
     DESCENT = "Опускание"
     BOTTOM = "Нижняя точка"

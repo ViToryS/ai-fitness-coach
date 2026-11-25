@@ -1,13 +1,13 @@
 
 from src.exercises.base.phase import ExercisePhase
 from src.exercises.base.phase_detector import PhaseDetector
-from src.exercises.squat.phase.squat_phase_detector import (
-    SquatPhaseDetector as SquatPhaseAlgorithm,
+from src.exercises.squat.phase.squat_phase_algorithm import (
+    SquatPhaseAlgorithm,
 )
 
 
 class SquatPhaseDetector(PhaseDetector):
-    """Адаптирует алгоритм определения фаз приседаний к общей архитектуре."""
+    """Адаптер алгоритма приседаний для общей архитектуры упражнений."""
 
     PHASES = {
         SquatPhaseAlgorithm.READY: ExercisePhase(
@@ -25,10 +25,10 @@ class SquatPhaseDetector(PhaseDetector):
     }
 
     def __init__(self):
-        self.detector = SquatPhaseAlgorithm()
+        self._algorithm = SquatPhaseAlgorithm()
 
     def update(self, landmarks) -> ExercisePhase | None:
-        phase = self.detector.update(landmarks)
+        phase = self._algorithm.update(landmarks)
 
         if phase == SquatPhaseAlgorithm.NO_POSE:
             return None
@@ -36,4 +36,4 @@ class SquatPhaseDetector(PhaseDetector):
         return self.PHASES.get(phase)
 
     def reset(self):
-        self.detector.reset()
+        self._algorithm.reset()
