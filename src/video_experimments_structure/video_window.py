@@ -1,7 +1,7 @@
 
 import cv2
 import numpy as np
-
+from src.exercises.push_up.push_up_exercise import PushUpExercise
 from pathlib import Path
 from src.exercises.base.analysis_event import (
     PhaseChanged,
@@ -44,7 +44,8 @@ class VideoWindow(QMainWindow):
 
         self.exercise_registry = ExerciseRegistry()
         self.exercise_registry.register(SquatExercise)
-
+        self.exercise_registry.register(PushUpExercise)
+        
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
