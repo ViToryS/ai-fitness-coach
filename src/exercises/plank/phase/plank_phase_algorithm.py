@@ -1,7 +1,9 @@
-
 from __future__ import annotations
 
 import time
+from collections import deque
+
+import numpy as np
 
 from src.exercises.plank.phase.plank_angle_calculator import (
     PlankAngleCalculator,
@@ -14,16 +16,19 @@ class PlankPhaseAlgorithm:
     HOLD = "Удержание планки"
     NO_POSE = "Поза не обнаружена"
 
-    BODY_LINE_MIN = 165.0
-    BODY_LINE_MAX = 180.0
+    TORSO_ENTER_MAX_ANGLE = 65.0
+    LEG_ENTER_MAX_ANGLE = 70.0
 
-    ELBOW_MIN = 80.0
-    ELBOW_MAX = 100.0
+    TORSO_EXIT_MAX_ANGLE = 76.0
+    LEG_EXIT_MAX_ANGLE = 80.0
 
-    ALIGNMENT_MAX = 0.15
+    MIN_LEG_TO_TORSO_ENTER_RATIO = 0.80
+    MIN_LEG_TO_TORSO_EXIT_RATIO = 0.65
 
-    READY_TIME = 0.8
-    INVALID_TIMEOUT = 0.5
+    INITIAL_CONFIRM_TIME = 0.20
+    ENTER_HOLD_TIME = 0.25
+    EXIT_HOLD_TIME = 0.45
+
     LOST_TIMEOUT = 0.8
 
     SMOOTHING_WINDOW = 5
@@ -33,146 +38,168 @@ class PlankPhaseAlgorithm:
         self.reset()
 
     def reset(self):
-        self._phase = self.READY
 
-        self._valid_since = None
-        self._invalid_since = None
-        self._last_valid_time = time.monotonic()
+        self._phase = self.NO_POSE
 
-        self._history = []
+        self._last_valid_time = None
+
+        self._candidate_phase = None
+        self._candidate_since = None
+
+        self._history = deque(
+            maxlen=self.SMOOTHING_WINDOW
+        )
 
     @property
     def phase(self):
         return self._phase
 
-    def update(self, landmarks):
+    def update(self, landmarks, frame_shape=None):
         now = time.monotonic()
 
         if landmarks is None:
-            if now - self._last_valid_time > self.LOST_TIMEOUT:
-                self._phase = self.NO_POSE
-                self._clear_state()
+            return self._handle_missing_pose(now)
 
-            return self._phase
-
-        metrics = self._calculator.calculate(landmarks)
+        metrics = self._calculator.calculate(
+            landmarks,
+            frame_shape,
+        )
 
         if metrics is None:
-            if now - self._last_valid_time > self.LOST_TIMEOUT:
-                self._phase = self.NO_POSE
-                self._clear_state()
-
-            return self._phase
+            return self._handle_missing_pose(now)
 
         self._last_valid_time = now
 
-        if self._phase == self.NO_POSE:
-            self.reset()
-
         self._history.append(metrics)
-
-        if len(self._history) > self.SMOOTHING_WINDOW:
-            self._history.pop(0)
 
         smoothed = self._smooth_metrics()
 
         if smoothed is None:
             return self._phase
 
-        is_valid = self._is_valid_position(smoothed)
+        is_plank = self._is_plank_position(smoothed)
 
-        if is_valid:
-            self._invalid_since = None
+        target_phase = (
+            self.HOLD
+            if is_plank
+            else self.READY
+        )
 
-            if self._valid_since is None:
-                self._valid_since = now
+        return self._update_phase(
+            target_phase,
+            now,
+        )
 
-            if (
-                self._phase == self.READY
-                and now - self._valid_since >= self.READY_TIME
-            ):
-                self._phase = self.HOLD
+    def _is_plank_position(self, metrics: dict) -> bool:
+        """
+        Определяет, находится ли человек в положении планки.
 
+        При входе используются более строгие пороги.
+        Если человек уже находится в HOLD, применяются
+        более мягкие пороги для предотвращения мерцания.
+        """
+
+        if self._phase == self.HOLD:
+            torso_limit = self.TORSO_EXIT_MAX_ANGLE
+            leg_limit = self.LEG_EXIT_MAX_ANGLE
+
+            ratio_limit = (
+                self.MIN_LEG_TO_TORSO_EXIT_RATIO
+            )
         else:
-            self._valid_since = None
+            torso_limit = self.TORSO_ENTER_MAX_ANGLE
+            leg_limit = self.LEG_ENTER_MAX_ANGLE
 
-            if self._invalid_since is None:
-                self._invalid_since = now
+            ratio_limit = (
+                self.MIN_LEG_TO_TORSO_ENTER_RATIO
+            )
 
-            if (
-                self._phase == self.HOLD
-                and now - self._invalid_since >= self.INVALID_TIMEOUT
-            ):
-                self._phase = self.READY
+        torso_angle = metrics["torso_angle"]
+        leg_angle = metrics["leg_angle"]
+        ratio = metrics["leg_to_torso_ratio"]
 
-        return self._phase
-
-    def _smooth_metrics(self):
-        if not self._history:
-            return None
-
-        body_angles = [
-            item["body_line_angle"]
-            for item in self._history
-        ]
-
-        elbow_angles = [
-            item["elbow_angle_mean"]
-            for item in self._history
-        ]
-
-        alignment_values = [
-            item["elbow_alignment_deviation"]
-            for item in self._history
-            if item["elbow_alignment_deviation"] is not None
-        ]
-
-        return {
-            "body_line_angle": float(
-                sum(body_angles) / len(body_angles)
-            ),
-            "elbow_angle_mean": float(
-                sum(elbow_angles) / len(elbow_angles)
-            ),
-            "elbow_alignment_deviation": (
-                float(sum(alignment_values) / len(alignment_values))
-                if alignment_values
-                else None
-            ),
-        }
-
-    def _is_valid_position(self, metrics):
-        body_angle = metrics["body_line_angle"]
-        elbow_angle = metrics["elbow_angle_mean"]
-
-        if not (
-            self.BODY_LINE_MIN
-            <= body_angle
-            <= self.BODY_LINE_MAX
-        ):
+        if torso_angle > torso_limit:
             return False
 
-        if not (
-            self.ELBOW_MIN
-            <= elbow_angle
-            <= self.ELBOW_MAX
-        ):
+        if leg_angle > leg_limit:
             return False
 
-        alignment = metrics["elbow_alignment_deviation"]
-
-        if (
-            alignment is not None
-            and alignment > self.ALIGNMENT_MAX
-        ):
+        if ratio < ratio_limit:
             return False
 
         return True
 
-    def _clear_state(self):
-        self._valid_since = None
-        self._invalid_since = None
-        self._history.clear()
+    def _update_phase(self, target_phase: str, now: float):
+
+        if target_phase == self._phase:
+            self._clear_candidate()
+            return self._phase
+
+        if target_phase != self._candidate_phase:
+            self._candidate_phase = target_phase
+            self._candidate_since = now
+
+            return self._phase
+
+        if self._candidate_since is None:
+            self._candidate_since = now
+            return self._phase
+
+        if self._phase == self.NO_POSE:
+            required_time = self.INITIAL_CONFIRM_TIME
+
+        elif target_phase == self.HOLD:
+            required_time = self.ENTER_HOLD_TIME
+
+        else:
+            required_time = self.EXIT_HOLD_TIME
+
+        elapsed = now - self._candidate_since
+
+        if elapsed < required_time:
+            return self._phase
+
+        self._phase = target_phase
+        self._clear_candidate()
+
+        return self._phase
+
+    def _smooth_metrics(self) -> dict | None:
+        if not self._history:
+            return None
+
+        return {
+            key: float(
+                np.median([
+                    item[key]
+                    for item in self._history
+                ])
+            )
+            for key in (
+                "torso_angle",
+                "leg_angle",
+                "leg_to_torso_ratio",
+            )
+        }
+
+    def _handle_missing_pose(self, now: float):
+        self._clear_candidate()
+
+        if self._last_valid_time is None:
+            return self._phase
+
+        elapsed = now - self._last_valid_time
+
+        if elapsed >= self.LOST_TIMEOUT:
+            self._phase = self.NO_POSE
+            self._last_valid_time = None
+            self._history.clear()
+
+        return self._phase
+
+    def _clear_candidate(self):
+        self._candidate_phase = None
+        self._candidate_since = None
 
     def close(self):
         self.reset()

@@ -1,4 +1,3 @@
-
 from src.exercises.base.phase import ExercisePhase
 from src.exercises.base.phase_detector import PhaseDetector
 from src.exercises.plank.phase.plank_phase_algorithm import (
@@ -22,8 +21,16 @@ class PlankPhaseDetector(PhaseDetector):
     def __init__(self):
         self._algorithm = PlankPhaseAlgorithm()
 
-    def update(self, landmarks) -> ExercisePhase | None:
-        phase = self._algorithm.update(landmarks)
+    def update(
+        self,
+        landmarks,
+        frame_shape=None,
+    ) -> ExercisePhase | None:
+
+        phase = self._algorithm.update(
+            landmarks,
+            frame_shape,
+        )
 
         if phase == PlankPhaseAlgorithm.NO_POSE:
             return None

@@ -1,18 +1,17 @@
-
 from __future__ import annotations
 
 import numpy as np
 
 
 class PlankAngleCalculator:
-    """Вычисляет геометрические параметры планки."""
+    """Вычисляет геометрические параметры положения планки."""
 
     VISIBILITY_THRESHOLD = 0.5
 
-    def __init__(self, visibility_threshold: float = 0.5):
+    def __init__(self, visibility_threshold: float = VISIBILITY_THRESHOLD):
         self.visibility_threshold = visibility_threshold
 
-    def calculate(self, landmarks) -> dict | None:
+    def calculate(self, landmarks, frame_shape=None) -> dict | None:
         points = np.asarray(landmarks, dtype=np.float32)
 
         if (
@@ -22,123 +21,129 @@ class PlankAngleCalculator:
         ):
             return None
 
-        # Точки плеч, таза и голеностопов.
-        body_indices = [11, 12, 23, 24, 27, 28]
-        body_points = points[body_indices]
+        if frame_shape is None:
+            height = 1.0
+            width = 1.0
+        else:
+            if len(frame_shape) < 2:
+                return None
 
-        if not np.all(np.isfinite(body_points)):
+            height, width = frame_shape[:2]
+
+            if height <= 0 or width <= 0:
+                return None
+
+        valid_mask = (
+            np.isfinite(points[:, :4]).all(axis=1)
+            & (points[:, 3] >= self.visibility_threshold)
+        )
+
+        coordinates = points[:, :3].copy()
+
+
+        coordinates[:, 0] *= width
+        coordinates[:, 1] *= height
+        coordinates[:, 2] *= width
+
+        shoulder_center = self._get_center(
+            coordinates,
+            valid_mask,
+            [11, 12],
+        )
+
+        hip_center = self._get_center(
+            coordinates,
+            valid_mask,
+            [23, 24],
+        )
+
+        ankle_center = self._get_center(
+            coordinates,
+            valid_mask,
+            [27, 28],
+        )
+
+        if (
+            shoulder_center is None
+            or hip_center is None
+            or ankle_center is None
+        ):
             return None
 
-        if np.min(body_points[:, 3]) < self.visibility_threshold:
-            return None
-
-        left_shoulder = points[11, :2]
-        right_shoulder = points[12, :2]
-
-        left_hip = points[23, :2]
-        right_hip = points[24, :2]
-
-        left_ankle = points[27, :2]
-        right_ankle = points[28, :2]
-
-        shoulder_center = (left_shoulder + right_shoulder) / 2
-        hip_center = (left_hip + right_hip) / 2
-        ankle_center = (left_ankle + right_ankle) / 2
-
-        body_line_angle = self._angle(
+        torso_angle, torso_length = self._segment_metrics(
             shoulder_center,
+            hip_center,
+        )
+
+        leg_angle, leg_length = self._segment_metrics(
             hip_center,
             ankle_center,
         )
 
-        if body_line_angle is None:
+        if torso_angle is None or leg_angle is None:
             return None
 
-        elbow_angles = []
-        alignment_deviations = []
-
-        # Вектор продольной оси тела.
-        body_axis = ankle_center - shoulder_center
-        body_length = np.linalg.norm(body_axis)
-
-        if body_length > 1e-6:
-            body_axis = body_axis / body_length
-        else:
-            body_axis = None
-
-        for shoulder, elbow, wrist in (
-            (11, 13, 15),
-            (12, 14, 16),
-        ):
-            joints = points[[shoulder, elbow, wrist]]
-
-            if not np.all(np.isfinite(joints)):
-                continue
-
-            if np.min(joints[:, 3]) < self.visibility_threshold:
-                continue
-
-            elbow_angle = self._angle(
-                joints[0, :2],
-                joints[1, :2],
-                joints[2, :2],
-            )
-
-            if elbow_angle is not None:
-                elbow_angles.append(elbow_angle)
-
-            # Отклонение локтя вдоль продольной оси тела.
-            if body_axis is not None:
-                shoulder_point = joints[0, :2]
-                elbow_point = joints[1, :2]
-
-                longitudinal_offset = abs(
-                    np.dot(
-                        elbow_point - shoulder_point,
-                        body_axis,
-                    )
-                )
-
-                normalized_offset = (
-                    longitudinal_offset / body_length
-                )
-
-                alignment_deviations.append(
-                    float(normalized_offset)
-                )
-
-        if not elbow_angles:
+        if torso_length < 1e-6:
             return None
+
+        leg_to_torso_ratio = leg_length / torso_length
 
         return {
-            "body_line_angle": float(body_line_angle),
-            "elbow_angles": elbow_angles,
-            "elbow_angle_mean": float(np.mean(elbow_angles)),
-            "elbow_alignment_deviation": (
-                float(np.mean(alignment_deviations))
-                if alignment_deviations
-                else None
-            ),
+            "torso_angle": torso_angle,
+            "leg_angle": leg_angle,
+            "leg_to_torso_ratio": float(leg_to_torso_ratio),
         }
 
     @staticmethod
-    def _angle(a, b, c) -> float | None:
-        """Вычисляет внутренний угол ABC в градусах."""
+    def _get_center(
+        coordinates: np.ndarray,
+        valid_mask: np.ndarray,
+        indices: list[int],
+    ) -> np.ndarray | None:
+        visible_indices = [
+            index
+            for index in indices
+            if valid_mask[index]
+        ]
 
-        ba = a - b
-        bc = c - b
-
-        denominator = (
-            np.linalg.norm(ba)
-            * np.linalg.norm(bc)
-        )
-
-        if denominator < 1e-6:
+        if not visible_indices:
             return None
 
-        cosine = np.dot(ba, bc) / denominator
-        cosine = np.clip(cosine, -1.0, 1.0)
-
-        return float(
-            np.degrees(np.arccos(cosine))
+        return np.mean(
+            coordinates[visible_indices],
+            axis=0,
         )
+
+    @staticmethod
+    def _segment_metrics(
+        start: np.ndarray,
+        end: np.ndarray,
+    ) -> tuple[float | None, float]:
+        """
+        Вычисляет наклон сегмента относительно горизонтальной плоскости.
+
+        0 градусов — горизонтальное положение.
+        90 градусов — вертикальное положение.
+        """
+
+        vector = end - start
+
+        length = float(np.linalg.norm(vector))
+
+        if length < 1e-6:
+            return None, 0.0
+
+        horizontal_length = float(
+            np.linalg.norm(vector[[0, 2]])
+        )
+
+        angle = float(
+            np.degrees(
+                np.arctan2(
+                    abs(vector[1]),
+                    horizontal_length,
+                )
+            )
+        )
+
+        return angle, length
