@@ -145,7 +145,7 @@ class VideoManager(QThread):
             self.pose_worker = PoseWorker(self.exercise)
 
             self.pose_worker.analysis_event.connect(
-                self.analysis_event.emit
+                self.forward_analysis_event
             )
 
             self.pose_worker.error_occurred.connect(
@@ -234,3 +234,5 @@ class VideoManager(QThread):
             self.cap.release()
             self.cap = None
 
+    def forward_analysis_event(self, event):
+        self.analysis_event.emit(event)

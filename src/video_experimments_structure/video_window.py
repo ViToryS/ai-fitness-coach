@@ -74,7 +74,12 @@ class VideoWindow(QMainWindow):
             "background-color: black; color: white;"
         )
 
-        self.phase_panel = PhasePanel()
+        self.phase_panel = PhasePanel(
+            exercises=[
+                (exercise.id, exercise.name)
+                for exercise in self.exercise_registry.list_exercises()
+            ]
+        )
 
         video_layout = QHBoxLayout()
         video_layout.addWidget(self.video_label, stretch=1)
@@ -119,7 +124,12 @@ class VideoWindow(QMainWindow):
             self.btn_pause.setEnabled(True)
             return
 
-        exercise = self.exercise_registry.get("squat")
+        exercise_id = self.phase_panel.selected_exercise_id
+
+        if exercise_id is None:
+            return
+
+        exercise = self.exercise_registry.get(exercise_id)
 
         self.video = VideoManager(
             self.video_path,
@@ -141,6 +151,7 @@ class VideoWindow(QMainWindow):
         self._stopping = False
 
         self.video.start()
+        self.phase_panel.set_exercise_selection_enabled(False)
 
         self.btn_play.setEnabled(False)
         self.btn_pause.setEnabled(True)
@@ -185,6 +196,7 @@ class VideoWindow(QMainWindow):
         self.btn_pause.setEnabled(False)
         self.btn_pause.setText("Пауза")
         self.btn_stop.setEnabled(False)
+        self.phase_panel.set_exercise_selection_enabled(True)
         self.phase_panel.reset()
 
     def update_frame(self, frame: np.ndarray):
@@ -219,6 +231,7 @@ class VideoWindow(QMainWindow):
         self.btn_pause.setEnabled(False)
         self.btn_pause.setText("Пауза")
         self.btn_stop.setEnabled(False)
+        self.phase_panel.set_exercise_selection_enabled(True)
         self.is_paused = False
 
         if not self._stopping and self.video_label.pixmap() is not None:

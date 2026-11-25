@@ -6,15 +6,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QTextEdit,
+    QComboBox,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette, QTextCharFormat, QTextCursor
 
 
 class PhasePanel(QWidget):
-    """Показывает текущую фазу и историю анализа упражнения."""
 
-    def __init__(self):
+    def __init__(self, exercises: list[tuple[str, str]] | None = None):
         super().__init__()
 
         self.current_phase = None
@@ -26,6 +26,22 @@ class PhasePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(10)
+
+        exercise_title = QLabel("Упражнение")
+        exercise_title.setAlignment(Qt.AlignCenter)
+        exercise_title.setStyleSheet(
+            "font-size: 14px; font-weight: bold;"
+        )
+
+        self.exercise_selector = QComboBox()
+        self.exercise_selector.setMinimumHeight(32)
+
+        if exercises:
+            for exercise_id, exercise_name in exercises:
+                self.exercise_selector.addItem(
+                    exercise_name,
+                    exercise_id,
+                )
 
         title = QLabel("Текущая фаза")
         title.setAlignment(Qt.AlignCenter)
@@ -66,10 +82,19 @@ class PhasePanel(QWidget):
             }
         """)
 
+        layout.addWidget(exercise_title)
+        layout.addWidget(self.exercise_selector)
         layout.addWidget(title)
         layout.addWidget(self.phase_label)
         layout.addWidget(history_title)
         layout.addWidget(self.history, stretch=1)
+
+    @property
+    def selected_exercise_id(self) -> str | None:
+        return self.exercise_selector.currentData()
+
+    def set_exercise_selection_enabled(self, enabled: bool):
+        self.exercise_selector.setEnabled(enabled)
 
     def _append_history_line(self, text: str, color=None):
         cursor = self.history.textCursor()
