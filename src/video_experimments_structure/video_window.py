@@ -1,6 +1,8 @@
 
 import cv2
 import numpy as np
+
+from exercises.plank.plank_exercise import PlankExercise
 from src.exercises.push_up.push_up_exercise import PushUpExercise
 from pathlib import Path
 from src.exercises.base.analysis_event import (
@@ -45,7 +47,8 @@ class VideoWindow(QMainWindow):
         self.exercise_registry = ExerciseRegistry()
         self.exercise_registry.register(SquatExercise)
         self.exercise_registry.register(PushUpExercise)
-        
+        self.exercise_registry.register(PlankExercise)
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
