@@ -10,7 +10,6 @@ from PySide6.QtCore import QThread, Signal
 
 from src.core.pose_estimator import PoseEstimator
 from src.core.skeleton_visualizer import draw_skeleton
-from src.core.phase_detector import SquatPhaseDetector
 from src.exercises.squat.squat_exercise import SquatExercise
 from src.models.viewpoint import Viewpoint
 
@@ -57,12 +56,14 @@ class PoseWorker(QThread):
         pose = None
 
         try:
-
             pose = PoseEstimator()
-            phase_detector = SquatPhaseDetector()
+
+            exercise = SquatExercise()
+
+            phase_detector = exercise.create_phase_detector()
             last_phase = None
 
-            viewpoint_detector = SquatExercise().create_viewpoint_detector()
+            viewpoint_detector = exercise.create_viewpoint_detector()
             last_viewpoint = Viewpoint.UNKNOWN
             viewpoint_count = 0
 
@@ -76,6 +77,7 @@ class PoseWorker(QThread):
 
                     frame = self._latest_frame
                     self._latest_frame = None
+
                 landmarks = pose.process_frame(frame)
 
                 if landmarks is None:
@@ -84,6 +86,15 @@ class PoseWorker(QThread):
 
                 phase = phase_detector.update(landmarks)
 
+                # ExercisePhase преобразуем в отображаемое название.
+                phase_name = phase.name if phase is not None else None
+
+                if phase_name != last_phase:
+                    if phase_name is not None:
+                        self.phase_ready.emit(phase_name)
+
+                    last_phase = phase_name
+
                 if landmarks is not None:
                     viewpoint_result = viewpoint_detector.update(
                         landmarks,
@@ -91,8 +102,8 @@ class PoseWorker(QThread):
                     )
 
                     if (
-                            viewpoint_result.viewpoint != Viewpoint.UNKNOWN
-                            and viewpoint_result.viewpoint != last_viewpoint
+                        viewpoint_result.viewpoint != Viewpoint.UNKNOWN
+                        and viewpoint_result.viewpoint != last_viewpoint
                     ):
                         viewpoint_count += 1
                         last_viewpoint = viewpoint_result.viewpoint
@@ -102,12 +113,6 @@ class PoseWorker(QThread):
                             viewpoint_count
                         )
 
-                if phase != last_phase:
-
-                    self.phase_ready.emit(phase)
-                    last_phase = phase
-
-                if landmarks is not None:
                     with self._condition:
                         self._latest_landmarks = landmarks.copy()
                         self._last_detection_time = time.monotonic()
@@ -118,6 +123,7 @@ class PoseWorker(QThread):
         finally:
             if pose is not None:
                 pose.close()
+
 
 
 class VideoManager(QThread):

@@ -1,34 +1,36 @@
 
-from src.core.phase_detector import SquatPhaseDetector as CoreSquatPhaseDetector
 from src.exercises.base.phase import ExercisePhase
 from src.exercises.base.phase_detector import PhaseDetector
+from src.exercises.squat.phase.squat_phase_detector import (
+    SquatPhaseDetector as SquatPhaseAlgorithm,
+)
 
 
 class SquatPhaseDetector(PhaseDetector):
-    """Адаптирует детектор фаз приседаний к общей архитектуре."""
+    """Адаптирует алгоритм определения фаз приседаний к общей архитектуре."""
 
     PHASES = {
-        "Исходное положение": ExercisePhase(
+        SquatPhaseAlgorithm.READY: ExercisePhase(
             "ready", "Исходное положение"
         ),
-        "Опускание": ExercisePhase(
+        SquatPhaseAlgorithm.DESCENT: ExercisePhase(
             "descent", "Опускание"
         ),
-        "Нижняя точка": ExercisePhase(
+        SquatPhaseAlgorithm.BOTTOM: ExercisePhase(
             "bottom", "Нижняя точка"
         ),
-        "Подъём": ExercisePhase(
+        SquatPhaseAlgorithm.ASCENT: ExercisePhase(
             "ascent", "Подъём"
         ),
     }
 
     def __init__(self):
-        self.detector = CoreSquatPhaseDetector()
+        self.detector = SquatPhaseAlgorithm()
 
     def update(self, landmarks) -> ExercisePhase | None:
         phase = self.detector.update(landmarks)
 
-        if phase == CoreSquatPhaseDetector.NO_POSE:
+        if phase == SquatPhaseAlgorithm.NO_POSE:
             return None
 
         return self.PHASES.get(phase)
