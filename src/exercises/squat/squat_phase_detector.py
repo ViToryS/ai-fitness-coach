@@ -5,14 +5,21 @@ from src.exercises.base.phase_detector import PhaseDetector
 
 
 class SquatPhaseDetector(PhaseDetector):
-    """Адаптирует существующий детектор приседаний к общей архитектуре."""
+    """Адаптирует детектор фаз приседаний к общей архитектуре."""
 
     PHASES = {
-        "Исходное положение": ExercisePhase("ready", "Исходное положение"),
-        "Опускание": ExercisePhase("descent", "Опускание"),
-        "Нижняя точка": ExercisePhase("bottom", "Нижняя точка"),
-        "Подъём": ExercisePhase("ascent", "Подъём"),
-        "Завершение": ExercisePhase("complete", "Завершение"),
+        "Исходное положение": ExercisePhase(
+            "ready", "Исходное положение"
+        ),
+        "Опускание": ExercisePhase(
+            "descent", "Опускание"
+        ),
+        "Нижняя точка": ExercisePhase(
+            "bottom", "Нижняя точка"
+        ),
+        "Подъём": ExercisePhase(
+            "ascent", "Подъём"
+        ),
     }
 
     def __init__(self):
