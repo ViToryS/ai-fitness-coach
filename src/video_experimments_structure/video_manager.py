@@ -11,13 +11,12 @@ from PySide6.QtCore import QThread, Signal
 from src.core.pose_estimator import PoseEstimator
 from src.core.skeleton_visualizer import draw_skeleton
 from src.exercises.base.exercise import Exercise
-from src.models.viewpoint import Viewpoint
+
 
 
 class PoseWorker(QThread):
     error_occurred = Signal(str)
-    phase_ready = Signal(str)
-    viewpoint_ready = Signal(str, int)
+    analysis_event = Signal(object)
 
     def __init__(self, exercise: Exercise):
         super().__init__()
@@ -43,7 +42,7 @@ class PoseWorker(QThread):
 
             return (
                 self._latest_landmarks.copy(),
-                self._last_detection_time
+                self._last_detection_time,
             )
 
     def stop(self):
@@ -56,15 +55,11 @@ class PoseWorker(QThread):
 
     def run(self):
         pose = None
+        analyzer = None
 
         try:
             pose = PoseEstimator()
-
             analyzer = self.exercise.create_analyzer()
-
-            last_phase = None
-            last_viewpoint = Viewpoint.UNKNOWN
-            viewpoint_count = 0
 
             while True:
                 with self._condition:
@@ -79,37 +74,13 @@ class PoseWorker(QThread):
 
                 landmarks = pose.process_frame(frame)
 
-                result = analyzer.update(landmarks, frame.shape)
+                events = analyzer.update(
+                    landmarks,
+                    frame.shape,
+                )
 
-
-                phase = result.phase
-                phase_name = phase.name if phase is not None else None
-
-                if phase_name != last_phase:
-                    if phase_name is not None:
-                        self.phase_ready.emit(phase_name)
-
-                    last_phase = phase_name
-
-
-                if landmarks is None:
-                    last_viewpoint = Viewpoint.UNKNOWN
-
-                viewpoint_result = result.viewpoint
-
-                if (
-                        landmarks is not None
-                        and viewpoint_result is not None
-                        and viewpoint_result.viewpoint != Viewpoint.UNKNOWN
-                        and viewpoint_result.viewpoint != last_viewpoint
-                ):
-                    viewpoint_count += 1
-                    last_viewpoint = viewpoint_result.viewpoint
-
-                    self.viewpoint_ready.emit(
-                        last_viewpoint.value,
-                        viewpoint_count,
-                    )
+                for event in events:
+                    self.analysis_event.emit(event)
 
                 if landmarks is not None:
                     with self._condition:
@@ -120,15 +91,18 @@ class PoseWorker(QThread):
             self.error_occurred.emit(str(exc))
 
         finally:
-            if pose is not None:
-                pose.close()
+            try:
+                if analyzer is not None:
+                    analyzer.reset()
+            finally:
+                if pose is not None:
+                    pose.close()
 
 
 class VideoManager(QThread):
     frame_ready = Signal(np.ndarray)
     error_occurred = Signal(str)
-    phase_ready = Signal(str)
-    viewpoint_ready = Signal(str, int)
+    analysis_event = Signal(object)
 
     LANDMARK_TIMEOUT = 0.3
 
@@ -170,12 +144,10 @@ class VideoManager(QThread):
 
             self.pose_worker = PoseWorker(self.exercise)
 
-            self.pose_worker.phase_ready.connect(
-                self.forward_phase
+            self.pose_worker.analysis_event.connect(
+                self.analysis_event.emit
             )
-            self.pose_worker.viewpoint_ready.connect(
-                self.forward_viewpoint
-            )
+
             self.pose_worker.error_occurred.connect(
                 self.error_occurred.emit
             )
@@ -262,8 +234,3 @@ class VideoManager(QThread):
             self.cap.release()
             self.cap = None
 
-    def forward_phase(self, phase):
-        self.phase_ready.emit(phase)
-
-    def forward_viewpoint(self, viewpoint, count):
-        self.viewpoint_ready.emit(viewpoint, count)

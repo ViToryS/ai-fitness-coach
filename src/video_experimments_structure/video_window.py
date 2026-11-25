@@ -3,7 +3,10 @@ import cv2
 import numpy as np
 
 from pathlib import Path
-
+from src.exercises.base.analysis_event import (
+    PhaseChanged,
+    ViewpointChanged,
+)
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -130,9 +133,8 @@ class VideoWindow(QMainWindow):
         self.video.frame_ready.connect(self.update_frame)
         self.video.error_occurred.connect(self.show_error)
         self.video.finished.connect(self.on_video_finished)
-        self.video.phase_ready.connect(self.phase_panel.set_phase)
-        self.video.viewpoint_ready.connect(
-            self.phase_panel.add_viewpoint
+        self.video.analysis_event.connect(
+            self.handle_analysis_event
         )
 
         self.is_paused = False
@@ -143,6 +145,16 @@ class VideoWindow(QMainWindow):
         self.btn_play.setEnabled(False)
         self.btn_pause.setEnabled(True)
         self.btn_stop.setEnabled(True)
+
+    def handle_analysis_event(self, event):
+        if isinstance(event, PhaseChanged):
+            self.phase_panel.set_phase(event.phase.name)
+
+        elif isinstance(event, ViewpointChanged):
+            self.phase_panel.add_viewpoint(
+                event.viewpoint.value,
+                event.count,
+            )
 
     def pause_video(self):
         if self.video is None or not self.video.isRunning():

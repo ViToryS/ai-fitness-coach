@@ -1,28 +1,25 @@
-
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-
-from src.exercises.base.phase import ExercisePhase
-from src.models.viewpoint import ViewpointResult
+from src.exercises.base.analysis_event import AnalysisEvent
+from src.exercises.base.frame_analyzer import FrameAnalyzer
 
 
-@dataclass(frozen=True)
-class ExerciseAnalysisResult:
-    """Результаты анализа одного кадра упражнения."""
+class ExerciseAnalyzer:
 
-    phase: ExercisePhase | None = None
-    viewpoint: ViewpointResult | None = None
+    def __init__(self, analyzers: list[FrameAnalyzer]):
+        if not analyzers:
+            raise ValueError("Для упражнения необходим хотя бы один анализатор.")
 
+        self._analyzers = tuple(analyzers)
 
-class ExerciseAnalyzer(ABC):
-    """Общий интерфейс анализатора упражнения."""
+    def update(self, landmarks, frame_shape) -> list[AnalysisEvent]:
+        events = []
 
-    @abstractmethod
-    def update(self, landmarks, frame_shape) -> ExerciseAnalysisResult:
-        """Анализирует один кадр и возвращает результаты."""
-        pass
+        for analyzer in self._analyzers:
+            events.extend(
+                analyzer.update(landmarks, frame_shape)
+            )
 
-    @abstractmethod
+        return events
+
     def reset(self) -> None:
-        """Сбрасывает внутреннее состояние анализатора."""
-        pass
+        for analyzer in self._analyzers:
+            analyzer.reset()
