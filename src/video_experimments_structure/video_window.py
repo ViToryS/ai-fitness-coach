@@ -1,7 +1,7 @@
 
 import cv2
 import numpy as np
-from src.ui.phase_panel import PhasePanel
+
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -17,7 +17,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
 
+from src.ui.phase_panel import PhasePanel
+
 from video_experimments_structure.video_manager import VideoManager
+
+from src.exercises.registry import ExerciseRegistry
+from src.exercises.squat.squat_exercise import SquatExercise
 
 
 class VideoWindow(QMainWindow):
@@ -32,6 +37,10 @@ class VideoWindow(QMainWindow):
         self.video = None
         self.is_paused = False
         self._stopping = False
+
+
+        self.exercise_registry = ExerciseRegistry()
+        self.exercise_registry.register(SquatExercise)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -107,10 +116,17 @@ class VideoWindow(QMainWindow):
             self.btn_pause.setEnabled(True)
             return
 
-        self.video = VideoManager(self.video_path)
+        exercise = self.exercise_registry.get("squat")
+
+        self.video = VideoManager(
+            self.video_path,
+            exercise
+        )
+
         self.phase_panel.begin_video(
             Path(self.video_path).name
         )
+
         self.video.frame_ready.connect(self.update_frame)
         self.video.error_occurred.connect(self.show_error)
         self.video.finished.connect(self.on_video_finished)
@@ -118,6 +134,7 @@ class VideoWindow(QMainWindow):
         self.video.viewpoint_ready.connect(
             self.phase_panel.add_viewpoint
         )
+
         self.is_paused = False
         self._stopping = False
 

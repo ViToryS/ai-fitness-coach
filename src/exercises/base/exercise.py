@@ -1,28 +1,38 @@
 
 from abc import ABC, abstractmethod
 
-from src.exercises.base.phase_detector import PhaseDetector
-from src.exercises.base.viewpoint_detector import ViewpointDetector
+from src.exercises.base.exercise_analyzer import ExerciseAnalyzer
 from src.models.viewpoint import Viewpoint
 
 
 class Exercise(ABC):
-    """Базовое описание упражнения и его определителей."""
+    """Базовый контракт любого упражнения."""
+
+    @property
+    @abstractmethod
+    def id(self) -> str:
+        """Уникальный программный идентификатор упражнения."""
+        pass
 
     @property
     @abstractmethod
     def name(self) -> str:
+        """Отображаемое название упражнения."""
+        pass
+
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """Краткое описание упражнения."""
         pass
 
     @property
     @abstractmethod
     def supported_viewpoints(self) -> list[Viewpoint]:
+        """Список поддерживаемых ракурсов."""
         pass
 
     @abstractmethod
-    def create_phase_detector(self) -> PhaseDetector:
-        pass
-
-    @abstractmethod
-    def create_viewpoint_detector(self) -> ViewpointDetector:
+    def create_analyzer(self) -> ExerciseAnalyzer:
+        """Создаёт анализатор конкретного упражнения."""
         pass

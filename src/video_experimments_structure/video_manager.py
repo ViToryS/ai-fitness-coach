@@ -10,7 +10,7 @@ from PySide6.QtCore import QThread, Signal
 
 from src.core.pose_estimator import PoseEstimator
 from src.core.skeleton_visualizer import draw_skeleton
-from src.exercises.squat.squat_exercise import SquatExercise
+from src.exercises.base.exercise import Exercise
 from src.models.viewpoint import Viewpoint
 
 
@@ -19,8 +19,10 @@ class PoseWorker(QThread):
     phase_ready = Signal(str)
     viewpoint_ready = Signal(str, int)
 
-    def __init__(self):
+    def __init__(self, exercise: Exercise):
         super().__init__()
+
+        self.exercise = exercise
 
         self._condition = threading.Condition()
         self._latest_frame = None
@@ -58,12 +60,9 @@ class PoseWorker(QThread):
         try:
             pose = PoseEstimator()
 
-            exercise = SquatExercise()
+            analyzer = self.exercise.create_analyzer()
 
-            phase_detector = exercise.create_phase_detector()
             last_phase = None
-
-            viewpoint_detector = exercise.create_viewpoint_detector()
             last_viewpoint = Viewpoint.UNKNOWN
             viewpoint_count = 0
 
@@ -80,13 +79,10 @@ class PoseWorker(QThread):
 
                 landmarks = pose.process_frame(frame)
 
-                if landmarks is None:
-                    viewpoint_detector.reset()
-                    last_viewpoint = Viewpoint.UNKNOWN
+                result = analyzer.update(landmarks, frame.shape)
 
-                phase = phase_detector.update(landmarks)
 
-                # ExercisePhase преобразуем в отображаемое название.
+                phase = result.phase
                 phase_name = phase.name if phase is not None else None
 
                 if phase_name != last_phase:
@@ -95,24 +91,27 @@ class PoseWorker(QThread):
 
                     last_phase = phase_name
 
-                if landmarks is not None:
-                    viewpoint_result = viewpoint_detector.update(
-                        landmarks,
-                        frame.shape
+
+                if landmarks is None:
+                    last_viewpoint = Viewpoint.UNKNOWN
+
+                viewpoint_result = result.viewpoint
+
+                if (
+                        landmarks is not None
+                        and viewpoint_result is not None
+                        and viewpoint_result.viewpoint != Viewpoint.UNKNOWN
+                        and viewpoint_result.viewpoint != last_viewpoint
+                ):
+                    viewpoint_count += 1
+                    last_viewpoint = viewpoint_result.viewpoint
+
+                    self.viewpoint_ready.emit(
+                        last_viewpoint.value,
+                        viewpoint_count,
                     )
 
-                    if (
-                        viewpoint_result.viewpoint != Viewpoint.UNKNOWN
-                        and viewpoint_result.viewpoint != last_viewpoint
-                    ):
-                        viewpoint_count += 1
-                        last_viewpoint = viewpoint_result.viewpoint
-
-                        self.viewpoint_ready.emit(
-                            last_viewpoint.value,
-                            viewpoint_count
-                        )
-
+                if landmarks is not None:
                     with self._condition:
                         self._latest_landmarks = landmarks.copy()
                         self._last_detection_time = time.monotonic()
@@ -125,18 +124,23 @@ class PoseWorker(QThread):
                 pose.close()
 
 
-
 class VideoManager(QThread):
     frame_ready = Signal(np.ndarray)
     error_occurred = Signal(str)
     phase_ready = Signal(str)
     viewpoint_ready = Signal(str, int)
+
     LANDMARK_TIMEOUT = 0.3
 
-    def __init__(self, video_path: str | Path):
+    def __init__(
+        self,
+        video_path: str | Path,
+        exercise: Exercise
+    ):
         super().__init__()
 
         self.video_path = Path(video_path)
+        self.exercise = exercise
 
         self.cap: Optional[cv2.VideoCapture] = None
         self.pose_worker: Optional[PoseWorker] = None
@@ -164,17 +168,18 @@ class VideoManager(QThread):
             frame_delay = 1.0 / fps
             next_frame_time = time.monotonic()
 
-            self.pose_worker = PoseWorker()
+            self.pose_worker = PoseWorker(self.exercise)
+
             self.pose_worker.phase_ready.connect(
                 self.forward_phase
             )
             self.pose_worker.viewpoint_ready.connect(
                 self.forward_viewpoint
             )
-
             self.pose_worker.error_occurred.connect(
                 self.error_occurred.emit
             )
+
             self.pose_worker.start()
 
             while self._running:
